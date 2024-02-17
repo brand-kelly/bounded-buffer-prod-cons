@@ -152,6 +152,7 @@ int producer_thread_function(void *pv) {
 
 int consumer_thread_function(void *pv) {
     int no_of_process_consumed = 0;
+    struct process_info* item;
     while (!kthread_should_stop()) {
         if (end_flag == 1) {
             break;
@@ -170,10 +171,14 @@ int consumer_thread_function(void *pv) {
         PCINFO("We are in [%s]'s Critical Section\n", current->comm);
         // Critical section: Consume item
         if (use < buffSize) {
-            struct process_info* item;
+
             item = dequeue(buffer);
             use++;
+        }
+        up(&mutex); // Release the mutex semaphore
+        up(&empty); // Increment the empty semaphore
 
+        if (item) {
             unsigned long long start_time_ns = item->start_time;
 		    unsigned long long ktime = ktime_get_ns();
 		    unsigned long long process_time_elapsed = (ktime - start_time_ns) / 1000000000;
@@ -187,11 +192,8 @@ int consumer_thread_function(void *pv) {
             total_no_of_process_consumed++;
             PCINFO("[%s] Consumed Item#-%d on buffer index:%d::PID:%d \t Elapsed Time %llu:%llu:%llu \n", current->comm,
 			   no_of_process_consumed, (use + buffSize - 1) % buffSize, item->pid, process_time_hr, process_time_min, process_time_sec);
+            kfree(item);
         }
-
-        up(&mutex); // Release the mutex semaphore
-        up(&empty); // Increment the empty semaphore
-
     }
     PCINFO("[%s] Consumer Thread stopped.\n", current->comm);
     return 0;
