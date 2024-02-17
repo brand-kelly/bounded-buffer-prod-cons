@@ -152,7 +152,7 @@ int producer_thread_function(void *pv) {
 
 int consumer_thread_function(void *pv) {
     int no_of_process_consumed = 0;
-    PCINFO("We are in [%s]\n", current->comm}
+    PCINFO("We are in [%s]\n", current->comm);
     while (!kthread_should_stop()) {
         if (end_flag == 1) {
             break;
@@ -160,12 +160,12 @@ int consumer_thread_function(void *pv) {
         if (down_interruptible(&full)) {
             continue;
         }
-        PCINFO("[%s] acquired full semaphore\n", current->comm}
+        PCINFO("[%s] acquired full semaphore\n", current->comm);
         if (down_interruptible(&mutex)) {
             up(&full);
             continue;
         }
-        PCINFO("[%s] acquired mutex semaphore\n", current->comm}
+        PCINFO("[%s] acquired mutex semaphore\n", current->comm);
         if (end_flag == 1) {
             break;
         }
