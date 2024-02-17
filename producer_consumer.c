@@ -152,7 +152,6 @@ int producer_thread_function(void *pv) {
 
 int consumer_thread_function(void *pv) {
     int no_of_process_consumed = 0;
-    PCINFO("We are in [%s]\n", current->comm);
     while (!kthread_should_stop()) {
         if (end_flag == 1) {
             break;
@@ -160,16 +159,15 @@ int consumer_thread_function(void *pv) {
         if (down_interruptible(&full)) {
             continue;
         }
-        PCINFO("[%s] acquired full semaphore\n", current->comm);
         if (down_interruptible(&mutex)) {
             up(&full);
             continue;
         }
-        PCINFO("[%s] acquired mutex semaphore\n", current->comm);
         if (end_flag == 1) {
             break;
         }
 
+        PCINFO("We are in [%s]'s Critical Section\n", current->comm);
         // Critical section: Consume item
         if (use < buffSize) {
             struct process_info* item;
@@ -245,12 +243,14 @@ static void __exit my_exit(void) {
 				{
 					up(&empty);
 				}
-
+                int prod_ret = -1;
+                int cons_ret = -1;
 				for (int i = 0; i < prod; i++)
 				{
 					if (producer_thread[i])
 					{
-						kthread_stop(producer_thread[i]);
+						prod_ret = kthread_stop(producer_thread[i]);
+                        PCINFO("Producer-%d: stopped with return value %d", i, prod_ret);
 					}
 				}
 
@@ -265,7 +265,8 @@ static void __exit my_exit(void) {
 				for (int i = 0; i < cons; i++)
 				{
 					if (consumer_thread[i]){
-						kthread_stop(consumer_thread[i]);
+						cons_ret = kthread_stop(consumer_thread[i]);
+                        PCINFO("Consumer-%d: stopped with return value %d", i, cons_ret);
 					}
 				}
 				break;
