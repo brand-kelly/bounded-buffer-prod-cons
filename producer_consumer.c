@@ -160,12 +160,12 @@ int consumer_thread_function(void *pv) {
         if (down_interruptible(&full)) {
             continue;
         }
-
+        PCINFO("[%s] acquired full semaphore\n", current->comm}
         if (down_interruptible(&mutex)) {
             up(&full);
             continue;
         }
-
+        PCINFO("[%s] acquired mutex semaphore\n", current->comm}
         if (end_flag == 1) {
             break;
         }
