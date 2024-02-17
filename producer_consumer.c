@@ -21,6 +21,7 @@
 
 unsigned long long total_time_elapsed = 0;
 
+// Struct to hold the task information we are interested in
 struct process_info {
     pid_t pid;
     unsigned long long start_time;
@@ -28,6 +29,7 @@ struct process_info {
     struct process_info *next;
 };
 
+// Qeueue to represent the buffer for our problem
 struct queue {
     struct process_info *head;
     struct process_info *tail;
@@ -102,15 +104,17 @@ struct process_info* dequeue(struct queue* buffer) {
 
 int producer_thread_function(void *pv) {
     struct task_struct *task;
-    allow_signal(SIGKILL);
 
     /* This produces an item by searching Linux's task_struct list
        and essentially "producing" a task for us to use when adding
        it to the buffer if the task's uid value matches the desired
        uid */
     for_each_process(task) {
+        if (kthread_should_stop()) {
+            break;
+        }
         if (task->cred->uid.val == uuid) {
-            // Produce Item;
+            // Produce Item
             struct process_info *new_item = kmalloc(sizeof(struct process_info), GFP_KERNEL);
             new_item->pid = task->pid;
             new_item->start_time = task->start_time;
@@ -118,17 +122,14 @@ int producer_thread_function(void *pv) {
             new_item->next = NULL;
             // Acquire semaphore locks
             if (down_interruptible(&empty)) {
-                up(&full);
-                continue;
+                break;
             }
 
             if (down_interruptible(&mutex)) {
                 up(&empty);
-                up(&full);
-                continue;
+                break;
             }
 
-            
             // Critical section: Add produced item to buffer
             if (fill < buffSize) {
                 enqueue(buffer, new_item);
@@ -137,6 +138,8 @@ int producer_thread_function(void *pv) {
 
                 PCINFO("[%s] Produce-Item#:%d at buffer index: %d for PID:%d \n", current->comm,
                         total_no_of_process_produced, (fill + buffSize - 1) % buffSize, task->pid);
+            } else {
+                kfree(new_item);
             }
             // Release locks
             up(&mutex); // Release the mutex semaphore
@@ -149,9 +152,11 @@ int producer_thread_function(void *pv) {
 
 int consumer_thread_function(void *pv) {
     int no_of_process_consumed = 0;
-    allow_signal(SIGKILL);
-
+    PCINFO("We are in [%s]\n", current->comm}
     while (!kthread_should_stop()) {
+        if (end_flag == 1) {
+            break;
+        }
         if (down_interruptible(&full)) {
             continue;
         }
@@ -202,26 +207,30 @@ static int __init my_init(void) {
     sema_init(&full, 0);
     sema_init(&mutex, 1);
 
-    buffer = init_queue();
+    if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
+        buffer = init_queue();
 
-    producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
-    for (int i = 0; i < prod; i++) {
-        producer_thread[i] = kthread_run(producer_thread_function, NULL, "Producer-%d", i);
-        if (IS_ERR(producer_thread[i])) {
-            pr_err("Failed to create producer thread\n");
-            return PTR_ERR(producer_thread[i]);
+        producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
+        for (int i = 0; i < prod; i++) {
+            producer_thread[i] = kthread_run(producer_thread_function, NULL, "Producer-%d", i);
+            if (IS_ERR(producer_thread[i])) {
+                pr_err("Failed to create producer thread\n");
+                return PTR_ERR(producer_thread[i]);
+            }
         }
-    }
 
-    consumer_thread = kmalloc(cons * sizeof(struct task_struct *), GFP_KERNEL);
-    for (int i = 0; i < cons; i++) {
-        consumer_thread[i] = kthread_run(consumer_thread_function, NULL, "Consumer-%d", i);
-        if (IS_ERR(consumer_thread[i])) {
-            pr_err("Failed to create consumer thread\n");
-            return PTR_ERR(consumer_thread[i]);
+        consumer_thread = kmalloc(cons * sizeof(struct task_struct *), GFP_KERNEL);
+        for (int i = 0; i < cons; i++) {
+            consumer_thread[i] = kthread_run(consumer_thread_function, NULL, "Consumer-%d", i);
+            if (IS_ERR(consumer_thread[i])) {
+                pr_err("Failed to create consumer thread\n");
+                return PTR_ERR(consumer_thread[i]);
+            }
         }
+    } else {
+        PCINFO("Incorrect Input Parameter Configuration Received. No kernel threads started. Please check input parameters.");
+		PCINFO("The kernel module expects buffer size (a positive number) and # of producers(0 or 1) and # of consumers > 0");
     }
-
     return 0;
 }
 
