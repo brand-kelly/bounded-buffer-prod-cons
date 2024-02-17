@@ -157,11 +157,11 @@ int consumer_thread_function(void *pv) {
             break;
         }
         if (down_interruptible(&full)) {
-            continue;
+            break;
         }
         if (down_interruptible(&mutex)) {
             up(&full);
-            continue;
+            break;
         }
         if (end_flag == 1) {
             break;
@@ -285,12 +285,12 @@ static void __exit my_exit(void) {
 		PCINFO("Total number of items produced: %d", total_no_of_process_produced);
 		PCINFO("Total number of items consumed: %d", total_no_of_process_consumed);
 		PCINFO("The total elapsed time of all processes for UID %d is \t%llu:%llu:%llu  \n", uuid, total_time_hr, total_time_min, total_time_sec);
+        kfree(producer_thread);
+        kfree(consumer_thread);
+        free_queue(buffer);
 	}
 
     pr_info("Module unloaded\n");
-    kfree(producer_thread);
-    kfree(consumer_thread);
-    free_queue(buffer);
 }
 
 module_init(my_init);
