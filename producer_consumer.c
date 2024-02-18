@@ -41,7 +41,9 @@ unsigned long long total_time_elapsed = 0;
 int total_no_of_process_produced = 0;
 int total_no_of_process_consumed = 0;
 int use = 0, fill = 0, end_flag = 0;
+
 struct queue* buffer;
+
 static struct semaphore empty;
 static struct semaphore full;
 static struct semaphore mutex;
@@ -68,13 +70,12 @@ module_param(uuid, int, 0);
         :rtype:
             struct queue
     */
-struct queue * init_queue(void) {
-    struct queue* buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
+void init_queue(struct queue *buffer) {
+    buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
     if (buffer) { 
         buffer->head = NULL;
         buffer->tail = NULL;
     }
-    return buffer;
 }
 
 void free_queue(struct queue *buffer) {
@@ -121,12 +122,9 @@ int producer_thread_function(void *pv) {
        it to the buffer if the task's uid value matches the desired
        uid */
     for_each_process(task) {
-        if (kthread_should_stop()) {
-            break;
-        }
         if (task->cred->uid.val == uuid) {
             // Produce Item
-            struct process_info *new_item;
+            struct process_info *new_item = kmalloc(sizeof(struct process_info), GFP_KERNEL);
             new_item->pid = task->pid;
             new_item->start_time = task->start_time;
             new_item->boot_time = task->start_boottime;
@@ -219,7 +217,7 @@ static int __init my_init(void) {
     sema_init(&mutex, 1);
 
     if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
-        buffer = init_queue();
+        init_queue(&buffer);
 
         producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
         for (int i = 0; i < prod; i++) {
@@ -246,10 +244,14 @@ static int __init my_init(void) {
 }
 
 static void __exit my_exit(void) {
+    PCINFO("Entering exit function");
 	if (buffSize > 0)
 	{
+        PCINFO("buffSize > 0 succeeds");
+
 		while (1)
 		{
+            PCINFO("total_no_of_process_consumed:%d == total_no_of_process_produced:%d or !cons:%d or !prod:%d", total_no_of_process_consumed, total_no_of_process_produced, cons, prod)
 			if (total_no_of_process_consumed == total_no_of_process_produced || !cons || !prod)
 			{
 				if (!cons)
