@@ -70,7 +70,7 @@ module_param(uuid, int, 0);
         :rtype:
             struct queue
     */
-void init_queue(struct queue *buffer) {
+void init_queue() {
     buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
     if (buffer) { 
         buffer->head = NULL;
@@ -125,6 +125,7 @@ int producer_thread_function(void *pv) {
         if (task->cred->uid.val == uuid) {
             // Produce Item
             struct process_info *new_item = kmalloc(sizeof(struct process_info), GFP_KERNEL);
+            if (new_item) {
             new_item->pid = task->pid;
             new_item->start_time = task->start_time;
             new_item->boot_time = task->start_boottime;
@@ -217,8 +218,11 @@ static int __init my_init(void) {
     sema_init(&mutex, 1);
 
     if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
-        init_queue(buffer);
-
+        init_queue();
+        if (!buffer) {
+            pr_err("Failed to allocate memory to buffer");
+            return PTR_ERR(buffer);
+        } 
         producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
         for (int i = 0; i < prod; i++) {
             producer_thread[i] = kthread_run(producer_thread_function, NULL, "Producer-%d", i);
