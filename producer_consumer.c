@@ -91,7 +91,7 @@ void free_queue(struct queue *buffer) {
     }
 }
 
-void enqueue(struct queue* buffer, struct process_info* item) {
+void enqueue(struct process_info* item) {
     if (buffer->head == NULL) {
         buffer->head = item;
         buffer->tail = item;
@@ -126,10 +126,14 @@ int producer_thread_function(void *pv) {
             // Produce Item
             struct process_info *new_item = kmalloc(sizeof(struct process_info), GFP_KERNEL);
             if (new_item) {
-            new_item->pid = task->pid;
-            new_item->start_time = task->start_time;
-            new_item->boot_time = task->start_boottime;
-            new_item->next = NULL;
+                new_item->pid = task->pid;
+                new_item->start_time = task->start_time;
+                new_item->boot_time = task->start_boottime;
+                new_item->next = NULL;
+            } else {
+                pr_err("Failed to allocate memory for produced item\n");
+                return 1;
+            }
             // Acquire semaphore locks
             if (down_interruptible(&empty)) {
                 break;
@@ -141,7 +145,7 @@ int producer_thread_function(void *pv) {
 
             // Critical section: Add produced item to buffer
             if (fill < buffSize) {
-                enqueue(buffer, new_item);
+                enqueue(new_item);
                 fill++;
                 total_no_of_process_produced++;
 
