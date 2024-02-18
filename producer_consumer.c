@@ -199,7 +199,7 @@ int consumer_thread_function(void *pv) {
 		    unsigned long long process_time_sec = (process_time_elapsed - 3600 * process_time_hr) - (process_time_min * 60);
 
             PCINFO("[%s] Consumed Item#-%d on buffer index:%d::PID:%d \t Elapsed Time %llu:%llu:%llu \n", current->comm,
-			   no_of_process_consumed, (use + buffSize - 1) % buffSize, item->pid, process_time_hr, process_time_min, process_time_sec);
+			   no_of_process_consumed, (use + buffSize - 1) % buffSize, consumer_item->pid, process_time_hr, process_time_min, process_time_sec);
 
             consumer_item = NULL;
         }
