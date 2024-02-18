@@ -217,7 +217,7 @@ static int __init my_init(void) {
     sema_init(&mutex, 1);
 
     if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
-        init_queue(&buffer);
+        init_queue(buffer);
 
         producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
         for (int i = 0; i < prod; i++) {
