@@ -189,7 +189,7 @@ int consumer_thread_function(void *pv) {
         up(&empty); // Increment the empty semaphore
 
         if (consumer_item) {
-            unsigned long long start_time_ns = item->start_time;
+            unsigned long long start_time_ns = consumer_item->start_time;
 		    unsigned long long ktime = ktime_get_ns();
 		    unsigned long long process_time_elapsed = (ktime - start_time_ns) / 1000000000;
 		    total_time_elapsed += ktime - start_time_ns;
