@@ -174,11 +174,6 @@ int consumer_thread_function(void *pv) {
         if (down_interruptible(&mutex)) {
             break;
         }
-        if (end_flag == 1) {
-            up(&mutex);
-            up(&full);
-            break;
-        }
 
         PCINFO("We are in [%s]'s Critical Section\n", current->comm);
         // Critical section: Consume item
@@ -264,6 +259,7 @@ static void __exit my_exit(void) {
 			{
 				if (!cons)
 				{
+                    PCINFO("Inside if not cons");
 					up(&empty);
 				}
                 int prod_ret = -1;
@@ -272,6 +268,7 @@ static void __exit my_exit(void) {
 				{
 					if (producer_thread[i])
 					{
+                        PCINFO("Before stopping producer thread");
 						prod_ret = kthread_stop(producer_thread[i]);
                         PCINFO("Producer-%d: stopped with return value %d", i, prod_ret);
 					}
