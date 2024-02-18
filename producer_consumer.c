@@ -269,7 +269,7 @@ static void __exit my_exit(void) {
 					if (producer_thread[i])
 					{
                         PCINFO("Before stopping producer thread");
-						prod_ret = kthread_stop(producer_thread[i]);
+						// prod_ret = kthread_stop(producer_thread[i]);
                         PCINFO("Producer-%d: stopped with return value %d", i, prod_ret);
 					}
 				}
