@@ -244,14 +244,14 @@ static int __init my_init(void) {
 }
 
 static void __exit my_exit(void) {
-    PCINFO("Entering exit function");
+    PCINFO("Entering exit function\n");
 	if (buffSize > 0)
 	{
-        PCINFO("buffSize > 0 succeeds");
+        PCINFO("buffSize > 0 succeeds\n");
 
 		while (1)
 		{
-            PCINFO("total_no_of_process_consumed:%d == total_no_of_process_produced:%d or !cons:%d or !prod:%d", total_no_of_process_consumed, total_no_of_process_produced, cons, prod)
+            PCINFO("total_no_of_process_consumed:%d == total_no_of_process_produced:%d or !cons:%d or !prod:%d\n", total_no_of_process_consumed, total_no_of_process_produced, cons, prod);
 			if (total_no_of_process_consumed == total_no_of_process_produced || !cons || !prod)
 			{
 				if (!cons)
@@ -284,6 +284,7 @@ static void __exit my_exit(void) {
                         PCINFO("Consumer-%d: stopped with return value %d", i, cons_ret);
 					}
 				}
+                PCINFO("At the end of exit if statement in while loop line 287\n");
 				break;
 			}
 			else
