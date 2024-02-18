@@ -70,7 +70,7 @@ module_param(uuid, int, 0);
         :rtype:
             struct queue
     */
-void init_queue() {
+void init_queue(void) {
     buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
     if (buffer) { 
         buffer->head = NULL;
