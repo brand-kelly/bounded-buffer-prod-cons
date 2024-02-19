@@ -169,10 +169,11 @@ int consumer_thread_function(void *pv) {
     while (!kthread_should_stop()) {
         
         if (down_interruptible(&full)) {
-            break;
+            continue;
         }
         if (down_interruptible(&mutex)) {
-            break;
+            up(&full);
+            continue;
         }
 
         PCINFO("We are in [%s]'s Critical Section\n", current->comm);
