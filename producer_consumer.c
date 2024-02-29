@@ -40,7 +40,7 @@ struct queue {
 unsigned long total_time_elapsed = 0;
 int total_no_of_process_produced = 0;
 int total_no_of_process_consumed = 0;
-int use = 0, fill = 0, end_flag = 0, producer_complete = 0;
+int fill = 0, end_flag = 0, producer_complete = 0;
 struct queue* buffer;
 
 static struct semaphore empty;
@@ -137,17 +137,20 @@ int producer_thread_function(void *pv) {
             }
             // Acquire semaphore locks
             if (down_interruptible(&empty)) {
+                kfree(new_item);
                 break;
             }
 
             if (down_interruptible(&mutex)) {
+                kfree(new_item);
+                up(&empty);
                 break;
             }
 
             // Critical section: Add produced item to buffer
             if (fill < buffSize) {
                 enqueue(new_item);
-                fill++;
+                ++fill;
                 total_no_of_process_produced++;
 
                 PCINFO("[%s] Produce-Item#:%d at buffer index: %d for PID:%d \n", current->comm,
@@ -182,10 +185,10 @@ int consumer_thread_function(void *pv) {
         }
 
         // Critical section: Consume item
-        if (use < buffSize && fill > 0) {
+        if (fill > 0) {
 
             consumer_item = dequeue(buffer);
-            use++;
+            --fill;
             no_of_process_consumed++;
             total_no_of_process_consumed++;
         }
