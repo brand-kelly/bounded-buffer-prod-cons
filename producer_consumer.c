@@ -18,7 +18,7 @@
 #include <linux/uidgid.h>
 
 #define PCINFO(s, ...) pr_info("###[%s]###" s, __FUNCTION__, ##__VA_ARGS__)
-
+#define MAX_BUFFER_SIZE 100
 
 
 /* Important structs for kernel module. */
@@ -27,7 +27,7 @@ struct process_info {
     pid_t pid;
     unsigned long start_time;
 	unsigned long boot_time;
-    struct process_info *next;
+    // struct process_info *next;
 };
 
 // Qeueue to represent the buffer for storing process_info objects
@@ -40,8 +40,9 @@ struct queue {
 unsigned long total_time_elapsed = 0;
 int total_no_of_process_produced = 0;
 int total_no_of_process_consumed = 0;
-int fill = 0, end_flag = 0, producer_complete = 0;
-struct queue* buffer;
+int use = 0, fill = 0, end_flag = 0, producer_complete = 0;
+// struct queue* buffer;
+struct process_info buffer[MAX_BUFFER_SIZE];
 
 static struct semaphore empty;
 static struct semaphore full;
@@ -69,48 +70,48 @@ module_param(uuid, int, 0);
         :rtype:
             struct queue
     */
-void init_queue(void) {
-    buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
-    if (buffer) { 
-        buffer->head = NULL;
-        buffer->tail = NULL;
-    }
-}
+// void init_queue(void) {
+//     buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
+//     if (buffer) { 
+//         buffer->head = NULL;
+//         buffer->tail = NULL;
+//     }
+// }
 
-void free_queue(struct queue *buffer) {
-    if (buffer) {
-        struct process_info *curr = buffer->head;
-        while (curr) {
-            struct process_info *next = curr->next;
-            kfree(curr);    // Free objects stored in buffer
-            curr = next;
-        }
-        kfree(buffer); // free the buffer
-    }
-}
+// void free_queue(struct queue *buffer) {
+//     if (buffer) {
+//         struct process_info *curr = buffer->head;
+//         while (curr) {
+//             struct process_info *next = curr->next;
+//             kfree(curr);    // Free objects stored in buffer
+//             curr = next;
+//         }
+//         kfree(buffer); // free the buffer
+//     }
+// }
 
-void enqueue(struct process_info* item) {
-    if (buffer->head == NULL) {
-        buffer->head = item;
-        buffer->tail = item;
-    } else {
-        buffer->tail->next = item;
-        buffer->tail = item;
-    }
-}
+// void enqueue(struct process_info* item) {
+//     if (buffer->head == NULL) {
+//         buffer->head = item;
+//         buffer->tail = item;
+//     } else {
+//         buffer->tail->next = item;
+//         buffer->tail = item;
+//     }
+// }
 
-struct process_info* dequeue(struct queue* buffer) {
-    if (buffer->head == NULL) {
-        return NULL;
-    } else {
-        struct process_info* item = buffer->head;
-        buffer->head = buffer->head->next;
-        if (buffer->head == NULL) {
-            buffer->tail = NULL;
-        }
-        return item;
-    }
-}
+// struct process_info* dequeue(struct queue* buffer) {
+//     if (buffer->head == NULL) {
+//         return NULL;
+//     } else {
+//         struct process_info* item = buffer->head;
+//         buffer->head = buffer->head->next;
+//         if (buffer->head == NULL) {
+//             buffer->tail = NULL;
+//         }
+//         return item;
+//     }
+// }
 
 int producer_thread_function(void *pv) {
     struct task_struct *task;
@@ -124,44 +125,26 @@ int producer_thread_function(void *pv) {
             break;
         }
         if (task->cred->uid.val == uuid) {
-            // Produce Item
-            struct process_info *new_item = kmalloc(sizeof(struct process_info), GFP_KERNEL);
-            if (new_item) {
-                new_item->pid = task->pid;
-                new_item->start_time = task->start_time;
-                new_item->boot_time = task->start_boottime;
-                new_item->next = NULL;
-            } else {
-                pr_err("Failed to allocate memory for produced item\n");
-                return 1;
-            }
-            // Acquire semaphore locks
             if (down_interruptible(&empty)) {
-                kfree(new_item);
+
                 break;
             }
 
             if (down_interruptible(&mutex)) {
-                kfree(new_item);
+
                 up(&empty);
                 break;
             }
 
             // Critical section: Add produced item to buffer
-            if (fill < buffSize) {
-                enqueue(new_item);
-                ++fill;
-                total_no_of_process_produced++;
+            buffer[fill].pid  = task->pid;
+            buffer[fill].start_time = task->start_time;
+            buffer[fill].boot_time = task->start_boottime;
+            fill = (fill + 1) % buffSize;
+            total_no_of_process_produced++;
+            PCINFO("[%s] Produce-Item#:%d at buffer index: %d for PID:%d \n", current->comm,
+                    total_no_of_process_produced, (fill + buffSize - 1) % buffSize, task->pid);
 
-                PCINFO("[%s] Produce-Item#:%d at buffer index: %d for PID:%d \n", current->comm,
-                        total_no_of_process_produced, (fill + buffSize - 1) % buffSize, task->pid);
-            } else {
-                kfree(new_item);
-                up(&mutex);
-                up(&full);
-                break;
-            }
-            // Release locks
             up(&mutex); // Release the mutex semaphore
             up(&full);  // Increment the full semaphore
         }
@@ -173,7 +156,14 @@ int producer_thread_function(void *pv) {
 
 int consumer_thread_function(void *pv) {
     int no_of_process_consumed = 0;
-    struct process_info *consumer_item;
+    struct process_info consumer_item;
+    unsigned long process_time_hr;
+    unsigned long process_time_min;
+    unsigned long process_time_sec;
+    unsigned long start_time_ns;
+    unsigned long ktime;
+    unsigned long process_time_elapsed;
+
     while (!kthread_should_stop()) {
         
         if (down_interruptible(&full)) {
@@ -183,33 +173,38 @@ int consumer_thread_function(void *pv) {
             up(&full);
             continue;
         }
-
-        // Critical section: Consume item
-        if (fill > 0) {
-
-            consumer_item = dequeue(buffer);
-            --fill;
-            no_of_process_consumed++;
-            total_no_of_process_consumed++;
+        if (end_flag) {
+            up(&mutex);
+            up(&full);
+            break;
         }
+        // Critical section: Consume item
+
+        consumer_item = buffer[use];
+        use = (use + 1) % buffSize;
+        no_of_process_consumed++;
+        total_no_of_process_consumed++;
+
         up(&mutex); // Release the mutex semaphore
         up(&empty); // Increment the empty semaphore
 
-        if (consumer_item) {
-            unsigned long start_time_ns = consumer_item->start_time;
-		    unsigned long ktime = ktime_get_ns();
-		    unsigned long process_time_elapsed = (ktime - start_time_ns) / 1000000000;
-		    total_time_elapsed += ktime - start_time_ns;
 
-		    unsigned long process_time_hr = process_time_elapsed / 3600;
-		    unsigned long process_time_min = (process_time_elapsed - 3600 * process_time_hr) / 60;
-		    unsigned long process_time_sec = (process_time_elapsed - 3600 * process_time_hr) - (process_time_min * 60);
+        start_time_ns = consumer_item.start_time;
+		ktime = ktime_get_ns();
+		process_time_elapsed = (ktime - start_time_ns) / 1000000000;
+		total_time_elapsed += ktime - start_time_ns;
 
-            PCINFO("[%s] Consumed Item#-%d on buffer index:%d::PID:%d \t Elapsed Time %lu:%lu:%lu \n", current->comm,
-			   no_of_process_consumed, (use + buffSize - 1) % buffSize, consumer_item->pid, process_time_hr, process_time_min, process_time_sec);
+		process_time_hr = process_time_elapsed / 3600;
+		process_time_min = (process_time_elapsed - 3600 * process_time_hr) / 60;
+		process_time_sec = (process_time_elapsed - 3600 * process_time_hr) - (process_time_min * 60);
 
-            consumer_item = NULL;
+        PCINFO("[%s] Consumed Item#-%d on buffer index:%d::PID:%d \t Elapsed Time %lu:%lu:%lu \n", current->comm,
+		   no_of_process_consumed, (use + buffSize - 1) % buffSize, consumer_item.pid, process_time_hr, process_time_min, process_time_sec);
+
+        if (end_flag) {
+            break;
         }
+
     }
     PCINFO("[%s] Consumer Thread stopped.\n", current->comm);
     return 0;
@@ -227,11 +222,11 @@ static int __init my_init(void) {
     sema_init(&mutex, 1);
 
     if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
-        init_queue();
-        if (!buffer) {
-            pr_err("Failed to allocate memory to buffer");
-            return PTR_ERR(buffer);
-        }
+        // init_queue();
+        // if (!buffer) {
+        //     pr_err("Failed to allocate memory to buffer");
+        //     return PTR_ERR(buffer);
+        // }
         producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
         for (size_t i = 0; i < prod; ++i) {
             producer_thread[i] = kthread_run(producer_thread_function, NULL, "Producer-%ld", i + 1);
@@ -239,7 +234,7 @@ static int __init my_init(void) {
                 pr_err("Failed to create producer thread\n");
                 return PTR_ERR(producer_thread[i]);
             } else {
-                PCINFO("[Producer-%d] kthread Producer Created Successfully\n", i + 1);
+                PCINFO("[Producer-%ld] kthread Producer Created Successfully\n", i + 1);
             }
         }
 
@@ -250,7 +245,7 @@ static int __init my_init(void) {
                 pr_err("Failed to create consumer thread\n");
                 return PTR_ERR(consumer_thread[i]);
             } else {
-                PCINFO("[Consumer-%d] kthread Consumer Created Successfully\n", i + 1);
+                PCINFO("[Consumer-%ld] kthread Consumer Created Successfully\n", i + 1);
             }
         }
     } else {
@@ -263,15 +258,14 @@ static int __init my_init(void) {
 static void __exit my_exit(void) {
 	if (buffSize > 0)
 	{
+        unsigned long total_time_hr;
+        unsigned long total_time_min;
+        unsigned long total_time_sec;
 
 		while (1)
 		{
 			if (total_no_of_process_consumed == total_no_of_process_produced || !cons || !prod)
 			{
-				if (!cons)
-				{
-					up(&empty);
-				}
 
 				if (prod == 1 && producer_thread[0] && !producer_complete)
 				{
@@ -301,16 +295,16 @@ static void __exit my_exit(void) {
 		// total_time_elapsed is now in nsec
 		total_time_elapsed = total_time_elapsed / 1000000000;
 
-		unsigned long total_time_hr = total_time_elapsed / 3600;
-		unsigned long total_time_min = (total_time_elapsed - 3600 * total_time_hr) / 60;
-		unsigned long total_time_sec = (total_time_elapsed - 3600 * total_time_hr) - (total_time_min * 60);
+		total_time_hr = total_time_elapsed / 3600;
+		total_time_min = (total_time_elapsed - 3600 * total_time_hr) / 60;
+		total_time_sec = (total_time_elapsed - 3600 * total_time_hr) - (total_time_min * 60);
 
 		PCINFO("Total number of items produced: %d", total_no_of_process_produced);
 		PCINFO("Total number of items consumed: %d", total_no_of_process_consumed);
 		PCINFO("The total elapsed time of all processes for UID %d is \t%lu:%lu:%lu  \n", uuid, total_time_hr, total_time_min, total_time_sec);
         kfree(producer_thread);
         kfree(consumer_thread);
-        free_queue(buffer);
+        // free_queue(buffer);
 	}
 
     PCINFO("CSE 330 Project-4 Kernel Module Removed\n");
