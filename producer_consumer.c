@@ -27,7 +27,6 @@ struct process_info {
     pid_t pid;
     unsigned long start_time;
 	unsigned long boot_time;
-    // struct process_info *next;
 };
 
 // Qeueue to represent the buffer for storing process_info objects
@@ -41,7 +40,6 @@ unsigned long total_time_elapsed = 0;
 int total_no_of_process_produced = 0;
 int total_no_of_process_consumed = 0;
 int use = 0, fill = 0, end_flag = 0, producer_complete = 0;
-// struct queue* buffer;
 struct process_info buffer[MAX_BUFFER_SIZE];
 
 static struct semaphore empty;
@@ -57,61 +55,11 @@ static int buffSize = 0;        // the initial value of the semaphore empty and 
 static int prod = 0;            // number of producers
 static int cons = 0;            // number of consumers (a non-negative number)
 static int uuid = 0;            // UID of the user
+
 module_param(buffSize, int, 0);
 module_param(prod, int, 0);
 module_param(cons, int, 0);
 module_param(uuid, int, 0);
-
-
-    /*
-        Dynamically allocates memory for the buffer as a queue for
-        the Bounded-Buffer Problem. The buffer is initialized as a
-        global variable above and function is invoked in main.
-        :rtype:
-            struct queue
-    */
-// void init_queue(void) {
-//     buffer = kmalloc(sizeof(struct queue), GFP_KERNEL);
-//     if (buffer) { 
-//         buffer->head = NULL;
-//         buffer->tail = NULL;
-//     }
-// }
-
-// void free_queue(struct queue *buffer) {
-//     if (buffer) {
-//         struct process_info *curr = buffer->head;
-//         while (curr) {
-//             struct process_info *next = curr->next;
-//             kfree(curr);    // Free objects stored in buffer
-//             curr = next;
-//         }
-//         kfree(buffer); // free the buffer
-//     }
-// }
-
-// void enqueue(struct process_info* item) {
-//     if (buffer->head == NULL) {
-//         buffer->head = item;
-//         buffer->tail = item;
-//     } else {
-//         buffer->tail->next = item;
-//         buffer->tail = item;
-//     }
-// }
-
-// struct process_info* dequeue(struct queue* buffer) {
-//     if (buffer->head == NULL) {
-//         return NULL;
-//     } else {
-//         struct process_info* item = buffer->head;
-//         buffer->head = buffer->head->next;
-//         if (buffer->head == NULL) {
-//             buffer->tail = NULL;
-//         }
-//         return item;
-//     }
-// }
 
 int producer_thread_function(void *pv) {
     struct task_struct *task;
@@ -222,11 +170,6 @@ static int __init my_init(void) {
     sema_init(&mutex, 1);
 
     if (buffSize > 0 && (prod >= 0 && prod < 2) && cons >= 0) {
-        // init_queue();
-        // if (!buffer) {
-        //     pr_err("Failed to allocate memory to buffer");
-        //     return PTR_ERR(buffer);
-        // }
         producer_thread = kmalloc(prod * sizeof(struct task_struct *), GFP_KERNEL);
         for (size_t i = 0; i < prod; ++i) {
             producer_thread[i] = kthread_run(producer_thread_function, NULL, "Producer-%ld", i + 1);
@@ -292,7 +235,7 @@ static void __exit my_exit(void) {
 				continue;
 		}
 
-		// total_time_elapsed is now in nsec
+		// total_time_elapsed is now in sec
 		total_time_elapsed = total_time_elapsed / 1000000000;
 
 		total_time_hr = total_time_elapsed / 3600;
@@ -304,7 +247,6 @@ static void __exit my_exit(void) {
 		PCINFO("The total elapsed time of all processes for UID %d is \t%lu:%lu:%lu  \n", uuid, total_time_hr, total_time_min, total_time_sec);
         kfree(producer_thread);
         kfree(consumer_thread);
-        // free_queue(buffer);
 	}
 
     PCINFO("CSE 330 Project-4 Kernel Module Removed\n");
